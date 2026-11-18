@@ -1,0 +1,131 @@
+<div class="page-header">
+  <div>
+    <h1>Dashboard</h1>
+    <p class="lead">Resumen de los análisis realizados en los últimos {{ days() }} días.</p>
+  </div>
+  <div class="segmented" role="group" aria-label="Periodo">
+    @for (r of ranges; track r) {
+      <button type="button" [attr.aria-pressed]="days() === r" (click)="days.set(r)">
+        {{ r }} días
+      </button>
+    }
+  </div>
+</div>
+
+@if (errorText()) {
+  <div class="alert alert--error" role="alert">
+    {{ errorText() }}
+    <button type="button" class="btn btn--link" (click)="stats.reload()">Reintentar</button>
+  </div>
+} @else if (stats.hasValue()) {
+  @let s = stats.value();
+  @let t = s.totals;
+
+  <div class="dash" [class.is-loading]="stats.isLoading()">
+    <section class="tiles" aria-label="Totales">
+      <div class="card tile">
+        <span class="tile__label">Análisis</span>
+        <span class="tile__value">{{ t.analyses | number }}</span>
+        <span class="tile__sub muted">desde el {{ s.since | date: 'dd/MM/yyyy' }}</span>
+      </div>
+      <div class="card tile tile--safe">
+        <span class="tile__label">Seguros</span>
+        <span class="tile__value">{{ t.safe | number }}</span>
+        <span class="tile__sub muted">{{ percent(t.safe, t.analyses) }} % del total</span>
+      </div>
+      <div class="card tile tile--suspicious">
+        <span class="tile__label">Sospechosos</span>
+        <span class="tile__value">{{ t.suspicious | number }}</span>
+        <span class="tile__sub muted">{{ percent(t.suspicious, t.analyses) }} % del total</span>
+      </div>
+      <div class="card tile tile--malicious">
+        <span class="tile__label">Maliciosos</span>
+        <span class="tile__value">{{ t.malicious | number }}</span>
+        <span class="tile__sub muted">{{ percent(t.malicious, t.analyses) }} % del total</span>
+      </div>
+      <div class="card tile">
+        <span class="tile__label">Score medio</span>
+        <span class="tile__value">{{ t.averageScore }}<small class="muted">/100</small></span>
+        <span class="tile__sub muted">de todas las URLs analizadas</span>
+      </div>
+    </section>
+
+    <section class="card dash__wide" aria-labelledby="daily-title">
+      <h2 id="daily-title">Análisis por día</h2>
+      @if (t.analyses === 0) {
+        <p class="muted">No hay análisis en este periodo.</p>
+      } @else {
+        <app-daily-chart [data]="s.daily" />
+      }
+    </section>
+
+    <section class="card" aria-labelledby="rules-title">
+      <h2 id="rules-title">Indicadores más frecuentes</h2>
+      <ul class="hbars">
+        @for (r of s.topRules; track r.code) {
+          <li class="hbars__row">
+            <span class="hbars__label" [title]="r.description + ' (' + r.code + ')'">{{ r.description }}</span>
+            <span class="hbars__track" aria-hidden="true">
+              <span class="hbars__bar" [style.width.%]="(r.count / maxRuleCount()) * 100"></span>
+            </span>
+            <span class="hbars__value mono">{{ r.count }}</span>
+          </li>
+        } @empty {
+          <li class="muted">Ningún indicador activado en este periodo.</li>
+        }
+      </ul>
+    </section>
+
+    <section class="card" aria-labelledby="threats-title">
+      <h2 id="threats-title">Amenazas recientes</h2>
+      <ul class="threats">
+        @for (th of s.recentThreats; track th.id) {
+          <li>
+            <a [routerLink]="['/analisis', th.id]" class="threats__link">
+              <app-risk-badge [classification]="th.classification" [small]="true" />
+              <span class="threats__text">
+                <span class="mono break">{{ th.url | defang }}</span>
+                <span class="muted">{{ th.score }}/100 · {{ th.createdAt | date: 'dd/MM HH:mm' }}</span>
+              </span>
+            </a>
+          </li>
+        } @empty {
+          <li class="muted">Sin amenazas detectadas en este periodo.</li>
+        }
+      </ul>
+    </section>
+
+    <section class="card dash__wide" aria-labelledby="domains-title">
+      <h2 id="domains-title">Dominios más analizados</h2>
+      @if (s.topDomains.length) {
+        <table class="table">
+          <thead>
+            <tr>
+              <th scope="col">Dominio</th>
+              <th scope="col" class="num">Análisis</th>
+              <th scope="col">Peor resultado</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (d of s.topDomains; track d.domain) {
+              <tr>
+                <td class="mono break">{{ d.domain }}</td>
+                <td class="num mono">{{ d.count }}</td>
+                <td>
+                  <app-risk-badge [classification]="classify(d.maxScore)" [small]="true" />
+                  <span class="mono muted"> {{ d.maxScore }}/100</span>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      } @else {
+        <p class="muted">Sin datos en este periodo.</p>
+      }
+    </section>
+  </div>
+} @else {
+  <div class="card card--loading" role="status">
+    <span class="spinner" aria-hidden="true"></span> Cargando estadísticas…
+  </div>
+}
