@@ -1,12 +1,23 @@
-import { Component, signal } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { httpResource } from '@angular/common/http';
+import { Component } from '@angular/core';
+import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { HealthResponse } from './core/api/api.models';
+import { API_BASE } from './core/api/url-sentinel-api';
 
 @Component({
-  imports: [RouterOutlet],
   selector: 'app-root',
-  styleUrl: './app.scss',
+  imports: [RouterOutlet, RouterLink, RouterLinkActive],
   templateUrl: './app.html',
+  styleUrl: './app.scss',
 })
 export class App {
-  protected readonly title = signal('frontend');
+  /** GET /api/health al arrancar: si la API o la BD no responden se muestra un aviso. */
+  protected readonly health = httpResource<HealthResponse>(() => `${API_BASE}/health`);
+
+  protected readonly links = [
+    { path: '/', label: 'Analizar', exact: true },
+    { path: '/historial', label: 'Historial', exact: false },
+    { path: '/dashboard', label: 'Dashboard', exact: false },
+    { path: '/reglas', label: 'Cómo funciona', exact: false },
+  ];
 }
