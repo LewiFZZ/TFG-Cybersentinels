@@ -1,0 +1,41 @@
+<div class="layout">
+  <section class="layout__main" aria-labelledby="page-title">
+    <h1 id="page-title">Analiza un enlace antes de abrirlo</h1>
+    <p class="lead">
+      Nuestro motor heurístico revisa la estructura de la URL (dominio, extensión, palabras,
+      codificación…) y te explica por qué es o no es sospechosa.
+    </p>
+
+    <app-url-form [loading]="store.loading()" (analyze)="analyze($event)" />
+
+    <div aria-live="polite">
+      @if (store.loading()) {
+        <div class="card card--loading" role="status">
+          <span class="spinner" aria-hidden="true"></span>
+          Analizando la URL…
+        </div>
+      } @else if (store.error()) {
+        <div class="alert alert--error" role="alert">{{ store.error() }}</div>
+      } @else if (store.result(); as analysis) {
+        <app-analysis-result [analysis]="analysis" />
+      }
+    </div>
+  </section>
+
+  <aside class="layout__side" aria-labelledby="recent-title">
+    <div class="card side-card">
+      <div class="side-card__header">
+        <h2 id="recent-title">Últimos análisis</h2>
+        <a routerLink="/historial" class="link">Ver todos</a>
+      </div>
+
+      @if (recent.error()) {
+        <p class="muted">No se ha podido cargar el historial.</p>
+      } @else if (recent.hasValue()) {
+        <app-recent-list [items]="recent.value().items" [currentId]="store.result()?.id" />
+      } @else {
+        <p class="muted">Cargando…</p>
+      }
+    </div>
+  </aside>
+</div>
