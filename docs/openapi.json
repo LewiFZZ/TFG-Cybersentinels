@@ -1,0 +1,853 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/health": {
+      "get": {
+        "operationId": "AppController_health",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "App"
+        ]
+      }
+    },
+    "/api/analyses": {
+      "post": {
+        "operationId": "UrlAnalysisController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAnalysisDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "URL vacía, mal formada o no http/https"
+          },
+          "429": {
+            "description": "Límite de análisis por minuto superado"
+          }
+        },
+        "summary": "Analiza una URL con la heurística propia y guarda el resultado",
+        "tags": [
+          "Análisis de URLs"
+        ]
+      },
+      "get": {
+        "operationId": "UrlAnalysisController_list",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "default": 0,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisPageDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Historial de análisis (más recientes primero)",
+        "tags": [
+          "Análisis de URLs"
+        ]
+      },
+      "delete": {
+        "operationId": "UrlAnalysisController_clear",
+        "parameters": [
+          {
+            "name": "confirm",
+            "required": true,
+            "in": "query",
+            "description": "Confirmación obligatoria: evita vaciar el historial por accidente",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearHistoryResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Falta ?confirm=true"
+          }
+        },
+        "summary": "Vacía todo el historial (requiere ?confirm=true)",
+        "tags": [
+          "Análisis de URLs"
+        ]
+      }
+    },
+    "/api/analyses/{id}": {
+      "get": {
+        "operationId": "UrlAnalysisController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "summary": "Detalle de un análisis",
+        "tags": [
+          "Análisis de URLs"
+        ]
+      },
+      "delete": {
+        "operationId": "UrlAnalysisController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "summary": "Borra un análisis",
+        "tags": [
+          "Análisis de URLs"
+        ]
+      }
+    },
+    "/api/heuristics/rules": {
+      "get": {
+        "operationId": "HeuristicsController_rules",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "example": "IP_HOST"
+                      },
+                      "weight": {
+                        "type": "integer",
+                        "example": 30
+                      },
+                      "description": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Catálogo de reglas heurísticas y sus pesos",
+        "tags": [
+          "Heurística"
+        ]
+      }
+    },
+    "/api/reputation/sources": {
+      "get": {
+        "operationId": "ReputationController_sources",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReputationSourceDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Fuentes de reputación externas y si están configuradas",
+        "tags": [
+          "Reputación"
+        ]
+      }
+    },
+    "/api/stats": {
+      "get": {
+        "operationId": "StatsController_get",
+        "parameters": [
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "Ventana de días (incluye hoy)",
+            "schema": {
+              "minimum": 1,
+              "maximum": 365,
+              "default": 30,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Estadísticas para el dashboard: totales, evolución diaria, reglas y dominios",
+        "tags": [
+          "Dashboard"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "URLSentinel API",
+    "description": "API de análisis de URLs para detección de phishing (herramienta local, sin autenticación)",
+    "version": "0.1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [
+    {
+      "url": "/",
+      "description": "Misma URL que el frontend (producción y proxy de desarrollo)"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "CreateAnalysisDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "URL a analizar (http/https). Si no lleva esquema se asume http://",
+            "example": "http://paypal-secure-login.xyz/account/verify",
+            "maxLength": 2048
+          }
+        },
+        "required": [
+          "url"
+        ]
+      },
+      "ScoreBreakdownDto": {
+        "type": "object",
+        "properties": {
+          "heuristics": {
+            "type": "number",
+            "example": 50,
+            "description": "Puntos de la heurística propia"
+          },
+          "reputation": {
+            "type": "number",
+            "example": 60,
+            "description": "Puntos de las fuentes de reputación externas"
+          }
+        },
+        "required": [
+          "heuristics",
+          "reputation"
+        ]
+      },
+      "RiskClassification": {
+        "type": "string",
+        "enum": [
+          "safe",
+          "suspicious",
+          "malicious"
+        ]
+      },
+      "AnalysisStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "completed",
+          "partial",
+          "failed"
+        ],
+        "description": "'partial' si alguna fuente externa no respondió"
+      },
+      "TriggeredRuleDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "BRAND_IMPERSONATION"
+          },
+          "weight": {
+            "type": "number",
+            "example": 35
+          },
+          "description": {
+            "type": "string",
+            "example": "El dominio menciona una marca conocida pero no pertenece a ella"
+          },
+          "details": {
+            "type": "object",
+            "nullable": true,
+            "example": {
+              "brand": "paypal",
+              "domain": "paypal-login.xyz"
+            }
+          }
+        },
+        "required": [
+          "code",
+          "weight",
+          "description",
+          "details"
+        ]
+      },
+      "ReputationSource": {
+        "type": "string",
+        "enum": [
+          "virustotal",
+          "google_safe_browsing",
+          "phishtank"
+        ]
+      },
+      "CheckStatus": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "timeout",
+          "rate_limited",
+          "error"
+        ]
+      },
+      "ReputationCheckDto": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReputationSource"
+              }
+            ]
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CheckStatus"
+              }
+            ]
+          },
+          "malicious": {
+            "type": "object",
+            "nullable": true,
+            "description": "true = peligrosa, false = limpia, null = sin datos o error"
+          },
+          "weight": {
+            "type": "number",
+            "example": 60,
+            "description": "Puntos que suma al score"
+          },
+          "details": {
+            "type": "object",
+            "nullable": true,
+            "example": {
+              "known": true,
+              "malicious": 7,
+              "suspicious": 1,
+              "engines": 92
+            }
+          },
+          "responseTimeMs": {
+            "type": "object",
+            "nullable": true,
+            "example": 312
+          },
+          "cached": {
+            "type": "boolean",
+            "description": "Resultado reutilizado de un análisis reciente de la misma URL"
+          }
+        },
+        "required": [
+          "source",
+          "status",
+          "malicious",
+          "weight",
+          "details",
+          "responseTimeMs",
+          "cached"
+        ]
+      },
+      "AnalysisResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "url": {
+            "type": "string",
+            "example": "paypal-login.xyz/account"
+          },
+          "normalizedUrl": {
+            "type": "string",
+            "example": "http://paypal-login.xyz/account"
+          },
+          "domain": {
+            "type": "string",
+            "example": "paypal-login.xyz"
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "example": 100,
+            "description": "min(100, heurística + reputación)"
+          },
+          "scoreBreakdown": {
+            "$ref": "#/components/schemas/ScoreBreakdownDto"
+          },
+          "classification": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RiskClassification"
+              }
+            ]
+          },
+          "status": {
+            "description": "'partial' si alguna fuente externa no respondió",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AnalysisStatus"
+              }
+            ]
+          },
+          "summary": {
+            "type": "object",
+            "example": "Malicioso: 4 indicadores (BRAND_IMPERSONATION, ...)"
+          },
+          "heuristics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TriggeredRuleDto"
+            }
+          },
+          "reputation": {
+            "description": "Vacío si no hay API keys configuradas",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReputationCheckDto"
+            }
+          },
+          "durationMs": {
+            "type": "object",
+            "example": 3,
+            "description": "Tiempo de análisis en ms"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "normalizedUrl",
+          "domain",
+          "score",
+          "scoreBreakdown",
+          "classification",
+          "status",
+          "summary",
+          "heuristics",
+          "reputation",
+          "durationMs",
+          "createdAt"
+        ]
+      },
+      "AnalysisListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "url": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "score": {
+            "type": "object"
+          },
+          "classification": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RiskClassification"
+              }
+            ]
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AnalysisStatus"
+              }
+            ]
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "domain",
+          "score",
+          "classification",
+          "status",
+          "createdAt"
+        ]
+      },
+      "AnalysisPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnalysisListItemDto"
+            }
+          },
+          "total": {
+            "type": "number",
+            "example": 137
+          },
+          "limit": {
+            "type": "number",
+            "example": 20
+          },
+          "offset": {
+            "type": "number",
+            "example": 0
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ]
+      },
+      "ClearHistoryResponseDto": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "number",
+            "example": 42,
+            "description": "Análisis eliminados"
+          }
+        },
+        "required": [
+          "deleted"
+        ]
+      },
+      "ReputationSourceDto": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReputationSource"
+              }
+            ]
+          },
+          "name": {
+            "type": "string",
+            "example": "VirusTotal"
+          },
+          "configured": {
+            "type": "boolean",
+            "example": true,
+            "description": "false si no hay API key: la fuente no se consulta"
+          }
+        },
+        "required": [
+          "source",
+          "name",
+          "configured"
+        ]
+      },
+      "StatsTotalsDto": {
+        "type": "object",
+        "properties": {
+          "analyses": {
+            "type": "number",
+            "example": 120
+          },
+          "safe": {
+            "type": "number",
+            "example": 80
+          },
+          "suspicious": {
+            "type": "number",
+            "example": 25
+          },
+          "malicious": {
+            "type": "number",
+            "example": 15
+          },
+          "averageScore": {
+            "type": "number",
+            "example": 27,
+            "description": "Score medio (0–100)"
+          }
+        },
+        "required": [
+          "analyses",
+          "safe",
+          "suspicious",
+          "malicious",
+          "averageScore"
+        ]
+      },
+      "DailyStatDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "example": "2026-11-17"
+          },
+          "total": {
+            "type": "number"
+          },
+          "safe": {
+            "type": "number"
+          },
+          "suspicious": {
+            "type": "number"
+          },
+          "malicious": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "date",
+          "total",
+          "safe",
+          "suspicious",
+          "malicious"
+        ]
+      },
+      "TopRuleDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "PHISHING_KEYWORDS"
+          },
+          "description": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number",
+            "example": 42
+          }
+        },
+        "required": [
+          "code",
+          "description",
+          "count"
+        ]
+      },
+      "TopDomainDto": {
+        "type": "object",
+        "properties": {
+          "domain": {
+            "type": "string",
+            "example": "paypal-login.xyz"
+          },
+          "count": {
+            "type": "number",
+            "example": 3
+          },
+          "maxScore": {
+            "type": "number",
+            "example": 80
+          }
+        },
+        "required": [
+          "domain",
+          "count",
+          "maxScore"
+        ]
+      },
+      "RecentThreatDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "url": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          },
+          "classification": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RiskClassification"
+              }
+            ]
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "score",
+          "classification",
+          "createdAt"
+        ]
+      },
+      "StatsResponseDto": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "number",
+            "example": 30
+          },
+          "since": {
+            "type": "string",
+            "example": "2026-10-19T00:00:00.000Z"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/StatsTotalsDto"
+          },
+          "daily": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DailyStatDto"
+            }
+          },
+          "topRules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TopRuleDto"
+            }
+          },
+          "topDomains": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TopDomainDto"
+            }
+          },
+          "recentThreats": {
+            "description": "Últimos 5 análisis sospechosos o maliciosos",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecentThreatDto"
+            }
+          }
+        },
+        "required": [
+          "days",
+          "since",
+          "totals",
+          "daily",
+          "topRules",
+          "topDomains",
+          "recentThreats"
+        ]
+      }
+    }
+  }
+}
