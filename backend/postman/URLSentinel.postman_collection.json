@@ -1,0 +1,2356 @@
+{
+  "info": {
+    "_postman_id": "770c2e8e-b170-4374-b017-b8d22ec37c68",
+    "name": "URLSentinel API",
+    "description": "Biblioteca de pruebas de la API de URLSentinel (CyberSentinels · C087).\n\nEjecutar las carpetas **en orden** (4, 5 y 6 usan datos creados por la 3).\nLa carpeta 8 agota el rate limit: tu IP queda bloqueada ~60 s al terminar.\n\nEntornos incluidos: `Docker` (http://localhost:8080/api) y `Dev` (http://localhost:3000/api, `npm run start:dev`).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Tests comunes a todas las peticiones",
+          "pm.test('[común] Tiempo de respuesta < 5 s (requisito de la memoria)', () =>",
+          "  pm.expect(pm.response.responseTime).to.be.below(5000));",
+          "if (pm.response.code !== 204) {",
+          "  pm.test('[común] Respuesta JSON', () =>",
+          "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json'));",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api"
+    },
+    {
+      "key": "safeAnalysisId",
+      "value": ""
+    },
+    {
+      "key": "maliciousAnalysisId",
+      "value": ""
+    },
+    {
+      "key": "firstPageIds",
+      "value": ""
+    },
+    {
+      "key": "deleteAnalysisId",
+      "value": ""
+    },
+    {
+      "key": "longUrl",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Salud",
+      "description": "Comprueba que la API está levantada y conectada a PostgreSQL.",
+      "item": [
+        {
+          "name": "Health check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test('API y base de datos operativas', () => {",
+                  "  pm.expect(r.status).to.eql('ok');",
+                  "  pm.expect(r.database).to.eql('up');",
+                  "});",
+                  "pm.test('timestamp ISO 8601', () => pm.expect(new Date(r.timestamp).toISOString()).to.eql(r.timestamp));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Devuelve 503 si la base de datos no responde."
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Heurística y reputación",
+      "description": "Catálogo de reglas del motor heurístico propio y fuentes de reputación externas.",
+      "item": [
+        {
+          "name": "Listar reglas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const rules = pm.response.json();",
+                  "pm.test('Devuelve 14 reglas', () => pm.expect(rules).to.be.an('array').with.lengthOf(14));",
+                  "pm.test('Cada regla tiene code, weight y description', () => {",
+                  "  rules.forEach((r) => {",
+                  "    pm.expect(r.code).to.match(/^[A-Z_]+$/);",
+                  "    pm.expect(r.weight).to.be.a('number').within(1, 100);",
+                  "    pm.expect(r.description).to.be.a('string').and.not.empty;",
+                  "  });",
+                  "});",
+                  "pm.test('Códigos únicos', () => {",
+                  "  const codes = rules.map((r) => r.code);",
+                  "  pm.expect(new Set(codes).size).to.eql(codes.length);",
+                  "});",
+                  "pm.test('Incluye las reglas clave de la memoria', () => {",
+                  "  const codes = rules.map((r) => r.code);",
+                  "  pm.expect(codes).to.include.members(['IP_HOST', 'BRAND_IMPERSONATION', 'URL_SHORTENER', 'SUSPICIOUS_TLD', 'PHISHING_KEYWORDS', 'PUNYCODE_DOMAIN']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/heuristics/rules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "heuristics",
+                "rules"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Fuentes de reputación",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json();",
+                  "pm.test('VirusTotal y Google Safe Browsing', () =>",
+                  "  pm.expect(s.map((x) => x.source)).to.have.members(['virustotal', 'google_safe_browsing']));",
+                  "pm.test('Cada fuente indica si está configurada', () =>",
+                  "  s.forEach((x) => { pm.expect(x.name).to.be.a('string'); pm.expect(x.configured).to.be.a('boolean'); }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reputation/sources",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reputation",
+                "sources"
+              ]
+            },
+            "description": "configured=false si no hay API key: esa fuente no se consulta."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Análisis: casos de riesgo",
+      "description": "Una URL por patrón. Cada petición comprueba el score, la clasificación y las reglas activadas.",
+      "item": [
+        {
+          "name": "Legítima: google.com → seguro",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const r = pm.response.json();",
+                  "pm.test('Respuesta con la forma esperada', () => {",
+                  "  pm.expect(r).to.include.all.keys('id', 'url', 'normalizedUrl', 'domain', 'score', 'classification', 'status', 'summary', 'scoreBreakdown', 'heuristics', 'reputation', 'durationMs', 'createdAt');",
+                  "  pm.expect(r.id).to.match(/^[0-9a-f-]{36}$/);",
+                  "  pm.expect(r.score).to.be.within(0, 100);",
+                  "  pm.expect(['safe', 'suspicious', 'malicious']).to.include(r.classification);",
+                  "  pm.expect(['completed', 'partial']).to.include(r.status);",
+                  "});",
+                  "pm.test('Score = suma de pesos (tope 100) y clasificación coherente', () => {",
+                  "  const sum = [...r.heuristics, ...r.reputation].reduce((s, x) => s + x.weight, 0);",
+                  "  pm.expect(r.score).to.eql(Math.min(100, sum));",
+                  "  const expected = r.score >= 70 ? 'malicious' : r.score >= 40 ? 'suspicious' : 'safe';",
+                  "  pm.expect(r.classification).to.eql(expected);",
+                  "});",
+                  "pm.test('Reglas ordenadas por peso (desc)', () => {",
+                  "  const w = r.heuristics.map((h) => h.weight);",
+                  "  pm.expect(w).to.eql([...w].sort((a, b) => b - a));",
+                  "});",
+                  "const codes = r.heuristics.map((h) => h.code);",
+                  "",
+                  "pm.test('Seguro y sin indicadores', () => {",
+                  "  pm.expect(r.classification).to.eql('safe');",
+                  "  pm.expect(r.score).to.eql(0);",
+                  "  pm.expect(r.heuristics).to.be.empty;",
+                  "});",
+                  "pm.collectionVariables.set('safeAnalysisId', r.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://www.google.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Legítima con marca: paypal.com → seguro",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const r = pm.response.json();",
+                  "pm.test('Respuesta con la forma esperada', () => {",
+                  "  pm.expect(r).to.include.all.keys('id', 'url', 'normalizedUrl', 'domain', 'score', 'classification', 'status', 'summary', 'scoreBreakdown', 'heuristics', 'reputation', 'durationMs', 'createdAt');",
+                  "  pm.expect(r.id).to.match(/^[0-9a-f-]{36}$/);",
+                  "  pm.expect(r.score).to.be.within(0, 100);",
+                  "  pm.expect(['safe', 'suspicious', 'malicious']).to.include(r.classification);",
+                  "  pm.expect(['completed', 'partial']).to.include(r.status);",
+                  "});",
+                  "pm.test('Score = suma de pesos (tope 100) y clasificación coherente', () => {",
+                  "  const sum = [...r.heuristics, ...r.reputation].reduce((s, x) => s + x.weight, 0);",
+                  "  pm.expect(r.score).to.eql(Math.min(100, sum));",
+                  "  const expected = r.score >= 70 ? 'malicious' : r.score >= 40 ? 'suspicious' : 'safe';",
+                  "  pm.expect(r.classification).to.eql(expected);",
+                  "});",
+                  "pm.test('Reglas ordenadas por peso (desc)', () => {",
+                  "  const w = r.heuristics.map((h) => h.weight);",
+                  "  pm.expect(w).to.eql([...w].sort((a, b) => b - a));",
+                  "});",
+                  "const codes = r.heuristics.map((h) => h.code);",
+                  "",
+                  "pm.test('El dominio oficial de la marca NO es suplantación', () => {",
+                  "  pm.expect(codes).to.not.include('BRAND_IMPERSONATION');",
+                  "  pm.expect(r.classification).to.eql('safe');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://www.paypal.com/es/home\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sin esquema → se normaliza a http://",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const r = pm.response.json();",
+                  "pm.test('Respuesta con la forma esperada', () => {",
+                  "  pm.expect(r).to.include.all.keys('id', 'url', 'normalizedUrl', 'domain', 'score', 'classification', 'status', 'summary', 'scoreBreakdown', 'heuristics', 'reputation', 'durationMs', 'createdAt');",
+                  "  pm.expect(r.id).to.match(/^[0-9a-f-]{36}$/);",
+                  "  pm.expect(r.score).to.be.within(0, 100);",
+                  "  pm.expect(['safe', 'suspicious', 'malicious']).to.include(r.classification);",
+                  "  pm.expect(['completed', 'partial']).to.include(r.status);",
+                  "});",
+                  "pm.test('Score = suma de pesos (tope 100) y clasificación coherente', () => {",
+                  "  const sum = [...r.heuristics, ...r.reputation].reduce((s, x) => s + x.weight, 0);",
+                  "  pm.expect(r.score).to.eql(Math.min(100, sum));",
+                  "  const expected = r.score >= 70 ? 'malicious' : r.score >= 40 ? 'suspicious' : 'safe';",
+                  "  pm.expect(r.classification).to.eql(expected);",
+                  "});",
+                  "pm.test('Reglas ordenadas por peso (desc)', () => {",
+                  "  const w = r.heuristics.map((h) => h.weight);",
+                  "  pm.expect(w).to.eql([...w].sort((a, b) => b - a));",
+                  "});",
+                  "const codes = r.heuristics.map((h) => h.code);",
+                  "",
+                  "pm.test('Normaliza esquema y host, elimina el fragmento', () => {",
+                  "  pm.expect(r.normalizedUrl).to.eql('http://example.com/Login');",
+                  "  pm.expect(r.domain).to.eql('example.com');",
+                  "});",
+                  "pm.test('Detecta falta de HTTPS y palabra clave', () => pm.expect(codes).to.include.members(['NO_HTTPS', 'PHISHING_KEYWORDS']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"Example.COM/Login#ancla\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "IP + puerto + \"bank/login\" → sospechoso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const r = pm.response.json();",
+                  "pm.test('Respuesta con la forma esperada', () => {",
+                  "  pm.expect(r).to.include.all.keys('id', 'url', 'normalizedUrl', 'domain', 'score', 'classification', 'status', 'summary', 'scoreBreakdown', 'heuristics', 'reputation', 'durationMs', 'createdAt');",
+                  "  pm.expect(r.id).to.match(/^[0-9a-f-]{36}$/);",
+                  "  pm.expect(r.score).to.be.within(0, 100);",
+                  "  pm.expect(['safe', 'suspicious', 'malicious']).to.include(r.classification);",
+                  "  pm.expect(['completed', 'partial']).to.include(r.status);",
+                  "});",
+                  "pm.test('Score = suma de pesos (tope 100) y clasificación coherente', () => {",
+                  "  const sum = [...r.heuristics, ...r.reputation].reduce((s, x) => s + x.weight, 0);",
+                  "  pm.expect(r.score).to.eql(Math.min(100, sum));",
+                  "  const expected = r.score >= 70 ? 'malicious' : r.score >= 40 ? 'suspicious' : 'safe';",
+                  "  pm.expect(r.classification).to.eql(expected);",
+                  "});",
+                  "pm.test('Reglas ordenadas por peso (desc)', () => {",
+                  "  const w = r.heuristics.map((h) => h.weight);",
+                  "  pm.expect(w).to.eql([...w].sort((a, b) => b - a));",
+                  "});",
+                  "const codes = r.heuristics.map((h) => h.code);",
+                  "",
+                  "pm.test('Reglas IP_HOST, NON_STANDARD_PORT, PHISHING_KEYWORDS', () =>",
+                  "  pm.expect(codes).to.include.members(['IP_HOST', 'NON_STANDARD_PORT', 'PHISHING_KEYWORDS']));",
+                  "pm.test('Al menos sospechoso', () => pm.expect(r.score).to.be.at.least(40));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"http://185.23.45.10:8080/bank/login.php\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Suplantación PayPal en .xyz → malicioso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const r = pm.response.json();",
+                  "pm.test('Respuesta con la forma esperada', () => {",
+                  "  pm.expect(r).to.include.all.keys('id', 'url', 'normalizedUrl', 'domain', 'score', 'classification', 'status', 'summary', 'scoreBreakdown', 'heuristics', 'reputation', 'durationMs', 'createdAt');",
+                  "  pm.expect(r.id).to.match(/^[0-9a-f-]{36}$/);",
+                  "  pm.expect(r.score).to.be.within(0, 100);",
+                  "  pm.expect(['safe', 'suspicious', 'malicious']).to.include(r.classification);",
+                  "  pm.expect(['completed', 'partial']).to.include(r.status);",
+                  "});",
+                  "pm.test('Score = suma de pesos (tope 100) y clasificación coherente', () => {",
+                  "  const sum = [...r.heuristics, ...r.reputation].reduce((s, x) => s + x.weight, 0);",
+                  "  pm.expect(r.score).to.eql(Math.min(100, sum));",
+                  "  const expected = r.score >= 70 ? 'malicious' : r.score >= 40 ? 'suspicious' : 'safe';",
+                  "  pm.expect(r.classification).to.eql(expected);",
+                  "});",
+                  "pm.test('Reglas ordenadas por peso (desc)', () => {",
+                  "  const w = r.heuristics.map((h) => h.weight);",
+                  "  pm.expect(w).to.eql([...w].sort((a, b) => b - a));",
+                  "});",
+                  "const codes = r.heuristics.map((h) => h.code);",
+                  "",
+                  "pm.test('Malicioso', () => pm.expect(r.classification).to.eql('malicious'));",
+                  "pm.test('Detecta suplantación con evidencia', () => {",
+                  "  const brand = r.heuristics.find((h) => h.code === 'BRAND_IMPERSONATION');",
+                  "  pm.expect(brand, 'BRAND_IMPERSONATION').to.exist;",
+                  "  pm.expect(brand.details).to.eql({ brand: 'paypal', domain: 'paypal-secure-login-verify.xyz' });",
+                  "});",
+                  "pm.test('TLD sospechoso y guiones', () => pm.expect(codes).to.include.members(['SUSPICIOUS_TLD', 'MANY_HYPHENS']));",
+                  "pm.test('Resumen legible', () => pm.expect(r.summary).to.match(/^Malicioso: \\d+ indicadores/));",
+                  "pm.collectionVariables.set('maliciousAnalysisId', r.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"http://paypal-secure-login-verify.xyz/account/update\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Marca como subdominio: paypal.com.secure-check.top",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const r = pm.response.json();",
+                  "pm.test('Respuesta con la forma esperada', () => {",
+                  "  pm.expect(r).to.include.all.keys('id', 'url', 'normalizedUrl', 'domain', 'score', 'classification', 'status', 'summary', 'scoreBreakdown', 'heuristics', 'reputation', 'durationMs', 'createdAt');",
+                  "  pm.expect(r.id).to.match(/^[0-9a-f-]{36}$/);",
+                  "  pm.expect(r.score).to.be.within(0, 100);",
+                  "  pm.expect(['safe', 'suspicious', 'malicious']).to.include(r.classification);",
+                  "  pm.expect(['completed', 'partial']).to.include(r.status);",
+                  "});",
+                  "pm.test('Score = suma de pesos (tope 100) y clasificación coherente', () => {",
+                  "  const sum = [...r.heuristics, ...r.reputation].reduce((s, x) => s + x.weight, 0);",
+                  "  pm.expect(r.score).to.eql(Math.min(100, sum));",
+                  "  const expected = r.score >= 70 ? 'malicious' : r.score >= 40 ? 'suspicious' : 'safe';",
+                  "  pm.expect(r.classification).to.eql(expected);",
+                  "});",
+                  "pm.test('Reglas ordenadas por peso (desc)', () => {",
+                  "  const w = r.heuristics.map((h) => h.weight);",
+                  "  pm.expect(w).to.eql([...w].sort((a, b) => b - a));",
+                  "});",
+                  "const codes = r.heuristics.map((h) => h.code);",
+                  "",
+                  "pm.test('Suplantación + subdominios excesivos', () =>",
+                  "  pm.expect(codes).to.include.members(['BRAND_IMPERSONATION', 'EXCESSIVE_SUBDOMAINS', 'SUSPICIOUS_TLD']));",
+                  "pm.test('No es seguro', () => pm.expect(r.classification).to.not.eql('safe'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://www.paypal.com.secure-check.top/login\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Homógrafo cirílico (аpple.com)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const r = pm.response.json();",
+                  "pm.test('Respuesta con la forma esperada', () => {",
+                  "  pm.expect(r).to.include.all.keys('id', 'url', 'normalizedUrl', 'domain', 'score', 'classification', 'status', 'summary', 'scoreBreakdown', 'heuristics', 'reputation', 'durationMs', 'createdAt');",
+                  "  pm.expect(r.id).to.match(/^[0-9a-f-]{36}$/);",
+                  "  pm.expect(r.score).to.be.within(0, 100);",
+                  "  pm.expect(['safe', 'suspicious', 'malicious']).to.include(r.classification);",
+                  "  pm.expect(['completed', 'partial']).to.include(r.status);",
+                  "});",
+                  "pm.test('Score = suma de pesos (tope 100) y clasificación coherente', () => {",
+                  "  const sum = [...r.heuristics, ...r.reputation].reduce((s, x) => s + x.weight, 0);",
+                  "  pm.expect(r.score).to.eql(Math.min(100, sum));",
+                  "  const expected = r.score >= 70 ? 'malicious' : r.score >= 40 ? 'suspicious' : 'safe';",
+                  "  pm.expect(r.classification).to.eql(expected);",
+                  "});",
+                  "pm.test('Reglas ordenadas por peso (desc)', () => {",
+                  "  const w = r.heuristics.map((h) => h.weight);",
+                  "  pm.expect(w).to.eql([...w].sort((a, b) => b - a));",
+                  "});",
+                  "const codes = r.heuristics.map((h) => h.code);",
+                  "",
+                  "pm.test('Convertido a punycode y detectado', () => {",
+                  "  pm.expect(r.domain).to.match(/^xn--/);",
+                  "  pm.expect(codes).to.include('PUNYCODE_DOMAIN');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://аpple.com/\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            },
+            "description": "La primera \"а\" es la letra cirílica U+0430, visualmente idéntica a la latina."
+          }
+        },
+        {
+          "name": "Usuario@ para ocultar el destino",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const r = pm.response.json();",
+                  "pm.test('Respuesta con la forma esperada', () => {",
+                  "  pm.expect(r).to.include.all.keys('id', 'url', 'normalizedUrl', 'domain', 'score', 'classification', 'status', 'summary', 'scoreBreakdown', 'heuristics', 'reputation', 'durationMs', 'createdAt');",
+                  "  pm.expect(r.id).to.match(/^[0-9a-f-]{36}$/);",
+                  "  pm.expect(r.score).to.be.within(0, 100);",
+                  "  pm.expect(['safe', 'suspicious', 'malicious']).to.include(r.classification);",
+                  "  pm.expect(['completed', 'partial']).to.include(r.status);",
+                  "});",
+                  "pm.test('Score = suma de pesos (tope 100) y clasificación coherente', () => {",
+                  "  const sum = [...r.heuristics, ...r.reputation].reduce((s, x) => s + x.weight, 0);",
+                  "  pm.expect(r.score).to.eql(Math.min(100, sum));",
+                  "  const expected = r.score >= 70 ? 'malicious' : r.score >= 40 ? 'suspicious' : 'safe';",
+                  "  pm.expect(r.classification).to.eql(expected);",
+                  "});",
+                  "pm.test('Reglas ordenadas por peso (desc)', () => {",
+                  "  const w = r.heuristics.map((h) => h.weight);",
+                  "  pm.expect(w).to.eql([...w].sort((a, b) => b - a));",
+                  "});",
+                  "const codes = r.heuristics.map((h) => h.code);",
+                  "",
+                  "pm.test('USERINFO_IN_URL y el dominio real es el de después de @', () => {",
+                  "  pm.expect(codes).to.include('USERINFO_IN_URL');",
+                  "  pm.expect(r.domain).to.eql('login-seguro.example');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://www.bbva.es@login-seguro.example/\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Acortador (bit.ly)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const r = pm.response.json();",
+                  "pm.test('Respuesta con la forma esperada', () => {",
+                  "  pm.expect(r).to.include.all.keys('id', 'url', 'normalizedUrl', 'domain', 'score', 'classification', 'status', 'summary', 'scoreBreakdown', 'heuristics', 'reputation', 'durationMs', 'createdAt');",
+                  "  pm.expect(r.id).to.match(/^[0-9a-f-]{36}$/);",
+                  "  pm.expect(r.score).to.be.within(0, 100);",
+                  "  pm.expect(['safe', 'suspicious', 'malicious']).to.include(r.classification);",
+                  "  pm.expect(['completed', 'partial']).to.include(r.status);",
+                  "});",
+                  "pm.test('Score = suma de pesos (tope 100) y clasificación coherente', () => {",
+                  "  const sum = [...r.heuristics, ...r.reputation].reduce((s, x) => s + x.weight, 0);",
+                  "  pm.expect(r.score).to.eql(Math.min(100, sum));",
+                  "  const expected = r.score >= 70 ? 'malicious' : r.score >= 40 ? 'suspicious' : 'safe';",
+                  "  pm.expect(r.classification).to.eql(expected);",
+                  "});",
+                  "pm.test('Reglas ordenadas por peso (desc)', () => {",
+                  "  const w = r.heuristics.map((h) => h.weight);",
+                  "  pm.expect(w).to.eql([...w].sort((a, b) => b - a));",
+                  "});",
+                  "const codes = r.heuristics.map((h) => h.code);",
+                  "",
+                  "pm.test('URL_SHORTENER', () => pm.expect(codes).to.include('URL_SHORTENER'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://bit.ly/3xYzAbC\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Redirección embebida + ofuscación",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const r = pm.response.json();",
+                  "pm.test('Respuesta con la forma esperada', () => {",
+                  "  pm.expect(r).to.include.all.keys('id', 'url', 'normalizedUrl', 'domain', 'score', 'classification', 'status', 'summary', 'scoreBreakdown', 'heuristics', 'reputation', 'durationMs', 'createdAt');",
+                  "  pm.expect(r.id).to.match(/^[0-9a-f-]{36}$/);",
+                  "  pm.expect(r.score).to.be.within(0, 100);",
+                  "  pm.expect(['safe', 'suspicious', 'malicious']).to.include(r.classification);",
+                  "  pm.expect(['completed', 'partial']).to.include(r.status);",
+                  "});",
+                  "pm.test('Score = suma de pesos (tope 100) y clasificación coherente', () => {",
+                  "  const sum = [...r.heuristics, ...r.reputation].reduce((s, x) => s + x.weight, 0);",
+                  "  pm.expect(r.score).to.eql(Math.min(100, sum));",
+                  "  const expected = r.score >= 70 ? 'malicious' : r.score >= 40 ? 'suspicious' : 'safe';",
+                  "  pm.expect(r.classification).to.eql(expected);",
+                  "});",
+                  "pm.test('Reglas ordenadas por peso (desc)', () => {",
+                  "  const w = r.heuristics.map((h) => h.weight);",
+                  "  pm.expect(w).to.eql([...w].sort((a, b) => b - a));",
+                  "});",
+                  "const codes = r.heuristics.map((h) => h.code);",
+                  "",
+                  "pm.test('EMBEDDED_REDIRECT y EXCESSIVE_ENCODING', () =>",
+                  "  pm.expect(codes).to.include.members(['EMBEDDED_REDIRECT', 'EXCESSIVE_ENCODING']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://example.com/r?u=https%3A%2F%2Fevil.tk%2F%25%32%30%3F%3D%26\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Análisis que se borrará (carpeta 6)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const r = pm.response.json();",
+                  "pm.test('Respuesta con la forma esperada', () => {",
+                  "  pm.expect(r).to.include.all.keys('id', 'url', 'normalizedUrl', 'domain', 'score', 'classification', 'status', 'summary', 'scoreBreakdown', 'heuristics', 'reputation', 'durationMs', 'createdAt');",
+                  "  pm.expect(r.id).to.match(/^[0-9a-f-]{36}$/);",
+                  "  pm.expect(r.score).to.be.within(0, 100);",
+                  "  pm.expect(['safe', 'suspicious', 'malicious']).to.include(r.classification);",
+                  "  pm.expect(['completed', 'partial']).to.include(r.status);",
+                  "});",
+                  "pm.test('Score = suma de pesos (tope 100) y clasificación coherente', () => {",
+                  "  const sum = [...r.heuristics, ...r.reputation].reduce((s, x) => s + x.weight, 0);",
+                  "  pm.expect(r.score).to.eql(Math.min(100, sum));",
+                  "  const expected = r.score >= 70 ? 'malicious' : r.score >= 40 ? 'suspicious' : 'safe';",
+                  "  pm.expect(r.classification).to.eql(expected);",
+                  "});",
+                  "pm.test('Reglas ordenadas por peso (desc)', () => {",
+                  "  const w = r.heuristics.map((h) => h.weight);",
+                  "  pm.expect(w).to.eql([...w].sort((a, b) => b - a));",
+                  "});",
+                  "const codes = r.heuristics.map((h) => h.code);",
+                  "",
+                  "pm.collectionVariables.set('deleteAnalysisId', r.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"http://borrame-postman.tk/login\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Historial y detalle",
+      "description": "Consulta de operaciones guardadas. Requiere haber ejecutado la carpeta 3.",
+      "item": [
+        {
+          "name": "Últimos 5 análisis",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test('Estructura paginada', () => {",
+                  "  pm.expect(r).to.have.all.keys('items', 'total', 'limit', 'offset');",
+                  "  pm.expect(r.limit).to.eql(5);",
+                  "  pm.expect(r.offset).to.eql(0);",
+                  "  pm.expect(r.items.length).to.be.at.most(5);",
+                  "  pm.expect(r.total).to.be.at.least(r.items.length);",
+                  "});",
+                  "pm.test('Ordenado del más reciente al más antiguo', () => {",
+                  "  const t = r.items.map((i) => new Date(i.createdAt).getTime());",
+                  "  pm.expect(t).to.eql([...t].sort((a, b) => b - a));",
+                  "});",
+                  "pm.test('Cada item tiene id, url, score y clasificación', () => {",
+                  "  r.items.forEach((i) => pm.expect(i).to.include.all.keys('id', 'url', 'domain', 'score', 'classification', 'status', 'createdAt'));",
+                  "});",
+                  "pm.collectionVariables.set('firstPageIds', JSON.stringify(r.items.map((i) => i.id)));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analyses?limit=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Paginación: limit=2&offset=1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "const first = JSON.parse(pm.collectionVariables.get('firstPageIds') || '[]');",
+                  "pm.test('Devuelve como máximo 2', () => pm.expect(r.items.length).to.be.at.most(2));",
+                  "pm.test('El offset salta el primero de la página anterior', () => {",
+                  "  if (first.length >= 3) pm.expect(r.items.map((i) => i.id)).to.eql(first.slice(1, 3));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analyses?limit=2&offset=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "2"
+                },
+                {
+                  "key": "offset",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sin parámetros → limit 20 por defecto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test('limit=20 y offset=0 por defecto', () => {",
+                  "  pm.expect(r.limit).to.eql(20);",
+                  "  pm.expect(r.offset).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Detalle del análisis malicioso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test('Coincide con el análisis creado', () => {",
+                  "  pm.expect(r.id).to.eql(pm.collectionVariables.get('maliciousAnalysisId'));",
+                  "  pm.expect(r.classification).to.eql('malicious');",
+                  "  pm.expect(r.url).to.eql('http://paypal-secure-login-verify.xyz/account/update');",
+                  "});",
+                  "pm.test('Reglas reconstruidas con su descripción', () => {",
+                  "  pm.expect(r.heuristics).to.not.be.empty;",
+                  "  r.heuristics.forEach((h) => pm.expect(h.description).to.be.a('string').and.not.eql(h.code));",
+                  "});",
+                  "pm.test('Score guardado = suma de pesos guardados', () => {",
+                  "  pm.expect(r.score).to.eql(Math.min(100, [...r.heuristics, ...r.reputation].reduce((s, x) => s + x.weight, 0)));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analyses/{{maliciousAnalysisId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses",
+                "{{maliciousAnalysisId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Detalle del análisis seguro",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test('Seguro, sin reglas, con resumen', () => {",
+                  "  pm.expect(r.classification).to.eql('safe');",
+                  "  pm.expect(r.heuristics).to.be.empty;",
+                  "  pm.expect(r.summary).to.match(/^Seguro/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analyses/{{safeAnalysisId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses",
+                "{{safeAnalysisId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Dashboard",
+      "description": "Estadísticas agregadas para el dashboard (GET /stats).",
+      "item": [
+        {
+          "name": "Estadísticas por defecto (30 días)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test('Estructura completa', () =>",
+                  "  pm.expect(r).to.have.all.keys('days', 'since', 'totals', 'daily', 'topRules', 'topDomains', 'recentThreats'));",
+                  "pm.test('Ventana de 30 días con un punto por día', () => {",
+                  "  pm.expect(r.days).to.eql(30);",
+                  "  pm.expect(r.daily).to.have.lengthOf(30);",
+                  "});",
+                  "pm.test('Los totales por nivel suman el total', () => {",
+                  "  const t = r.totals;",
+                  "  pm.expect(t.safe + t.suspicious + t.malicious).to.eql(t.analyses);",
+                  "  pm.expect(t.averageScore).to.be.within(0, 100);",
+                  "});",
+                  "pm.test('La suma diaria coincide con el total', () =>",
+                  "  pm.expect(r.daily.reduce((s, x) => s + x.total, 0)).to.eql(r.totals.analyses));",
+                  "pm.test('Hay análisis hoy (los de la carpeta 3)', () => {",
+                  "  const today = new Date().toISOString().slice(0, 10);",
+                  "  pm.expect(r.daily[r.daily.length - 1].date).to.eql(today);",
+                  "  pm.expect(r.daily[r.daily.length - 1].total).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stats"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Ventana de 7 días: fechas consecutivas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test('7 días consecutivos, el último es hoy', () => {",
+                  "  pm.expect(r.daily).to.have.lengthOf(7);",
+                  "  const dates = r.daily.map((d) => d.date);",
+                  "  for (let i = 1; i < dates.length; i++) {",
+                  "    pm.expect(Date.parse(dates[i]) - Date.parse(dates[i - 1])).to.eql(86400000);",
+                  "  }",
+                  "  pm.expect(dates[6]).to.eql(new Date().toISOString().slice(0, 10));",
+                  "});",
+                  "pm.test('since = inicio del primer día (UTC)', () =>",
+                  "  pm.expect(r.since).to.eql(r.daily[0].date + 'T00:00:00.000Z'));",
+                  "pm.test('Cada día: niveles suman el total', () =>",
+                  "  r.daily.forEach((d) => pm.expect(d.safe + d.suspicious + d.malicious).to.eql(d.total)));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stats?days=7",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stats"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "7"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Rankings: reglas, dominios y amenazas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test('Máximo 10 reglas, ordenadas, con descripción', () => {",
+                  "  pm.expect(r.topRules.length).to.be.at.most(10);",
+                  "  const c = r.topRules.map((x) => x.count);",
+                  "  pm.expect(c).to.eql([...c].sort((a, b) => b - a));",
+                  "  r.topRules.forEach((x) => pm.expect(x.description).to.not.eql(x.code));",
+                  "});",
+                  "pm.test('Máximo 10 dominios, ordenados por número de análisis', () => {",
+                  "  pm.expect(r.topDomains.length).to.be.at.most(10);",
+                  "  const c = r.topDomains.map((x) => x.count);",
+                  "  pm.expect(c).to.eql([...c].sort((a, b) => b - a));",
+                  "});",
+                  "pm.test('Amenazas recientes: máx. 5, ninguna \"safe\", de más nueva a más antigua', () => {",
+                  "  pm.expect(r.recentThreats.length).to.be.within(1, 5);",
+                  "  r.recentThreats.forEach((x) => pm.expect(x.classification).to.not.eql('safe'));",
+                  "  const t = r.recentThreats.map((x) => Date.parse(x.createdAt));",
+                  "  pm.expect(t).to.eql([...t].sort((a, b) => b - a));",
+                  "});",
+                  "pm.test('Incluye el análisis malicioso de la carpeta 3', () =>",
+                  "  pm.expect(r.topDomains.map((d) => d.domain)).to.include('paypal-secure-login-verify.xyz'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stats?days=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stats"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "days=0 → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const r = pm.response.json();",
+                  "pm.test('Formato de error de Nest', () => {",
+                  "  pm.expect(r.statusCode).to.eql(400);",
+                  "  pm.expect(r).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stats?days=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stats"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "days=366 → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const r = pm.response.json();",
+                  "pm.test('Formato de error de Nest', () => {",
+                  "  pm.expect(r.statusCode).to.eql(400);",
+                  "  pm.expect(r).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stats?days=366",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stats"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "366"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Borrado",
+      "description": "Borrado de análisis. El vaciado completo solo se prueba SIN confirmar: la colección nunca borra tu historial.",
+      "item": [
+        {
+          "name": "Borrar un análisis → 204",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));",
+                  "pm.test('Sin cuerpo', () => pm.expect(pm.response.text()).to.eql(''));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analyses/{{deleteAnalysisId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses",
+                "{{deleteAnalysisId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "El análisis borrado ya no existe → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analyses/{{deleteAnalysisId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses",
+                "{{deleteAnalysisId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Borrarlo otra vez → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analyses/{{deleteAnalysisId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses",
+                "{{deleteAnalysisId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Borrar con id no UUID → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const r = pm.response.json();",
+                  "pm.test('Formato de error de Nest', () => {",
+                  "  pm.expect(r.statusCode).to.eql(400);",
+                  "  pm.expect(r).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analyses/no-es-uuid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses",
+                "no-es-uuid"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Vaciar historial SIN confirmar → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const r = pm.response.json();",
+                  "pm.test('Formato de error de Nest', () => {",
+                  "  pm.expect(r.statusCode).to.eql(400);",
+                  "  pm.expect(r).to.have.property('message');",
+                  "});",
+                  "",
+                  "pm.test('Pide confirmación', () => pm.expect(JSON.stringify(r.message)).to.include('confirm=true'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            },
+            "description": "Para vaciar de verdad: DELETE /analyses?confirm=true (irreversible)."
+          }
+        },
+        {
+          "name": "Vaciar historial con confirm=false → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const r = pm.response.json();",
+                  "pm.test('Formato de error de Nest', () => {",
+                  "  pm.expect(r.statusCode).to.eql(400);",
+                  "  pm.expect(r).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analyses?confirm=false",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ],
+              "query": [
+                {
+                  "key": "confirm",
+                  "value": "false"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Validación y errores",
+      "description": "Entradas no válidas: todas deben rechazarse con 400/404 y sin guardar nada.",
+      "item": [
+        {
+          "name": "URL vacía",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const r = pm.response.json();",
+                  "pm.test('Formato de error de Nest', () => {",
+                  "  pm.expect(r.statusCode).to.eql(400);",
+                  "  pm.expect(r).to.have.property('message');",
+                  "});",
+                  "",
+                  "pm.test('Mensaje sobre campo vacío', () => pm.expect(JSON.stringify(r.message)).to.include('url should not be empty'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sin campo url",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const r = pm.response.json();",
+                  "pm.test('Formato de error de Nest', () => {",
+                  "  pm.expect(r.statusCode).to.eql(400);",
+                  "  pm.expect(r).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "url no es string",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const r = pm.response.json();",
+                  "pm.test('Formato de error de Nest', () => {",
+                  "  pm.expect(r.statusCode).to.eql(400);",
+                  "  pm.expect(r).to.have.property('message');",
+                  "});",
+                  "",
+                  "pm.test('Mensaje de tipo', () => pm.expect(JSON.stringify(r.message)).to.include('url must be a string'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": 12345\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Protocolo ftp://",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const r = pm.response.json();",
+                  "pm.test('Formato de error de Nest', () => {",
+                  "  pm.expect(r.statusCode).to.eql(400);",
+                  "  pm.expect(r).to.have.property('message');",
+                  "});",
+                  "",
+                  "pm.test('Solo http/https', () => pm.expect(r.message).to.eql('Solo se admiten URLs http o https'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"ftp://files.example.com/a.zip\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "javascript:",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const r = pm.response.json();",
+                  "pm.test('Formato de error de Nest', () => {",
+                  "  pm.expect(r.statusCode).to.eql(400);",
+                  "  pm.expect(r).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"javascript:alert(document.cookie)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Host sin dominio (localhost)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const r = pm.response.json();",
+                  "pm.test('Formato de error de Nest', () => {",
+                  "  pm.expect(r.statusCode).to.eql(400);",
+                  "  pm.expect(r).to.have.property('message');",
+                  "});",
+                  "",
+                  "pm.test('Mensaje de host', () => pm.expect(r.message).to.include('dominio completo'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"http://localhost/admin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Campo extra no permitido (mass assignment)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const r = pm.response.json();",
+                  "pm.test('Formato de error de Nest', () => {",
+                  "  pm.expect(r.statusCode).to.eql(400);",
+                  "  pm.expect(r).to.have.property('message');",
+                  "});",
+                  "",
+                  "pm.test('Rechaza propiedades no declaradas', () => {",
+                  "  const msg = JSON.stringify(r.message);",
+                  "  pm.expect(msg).to.include('property userId should not exist');",
+                  "  pm.expect(msg).to.include('property score should not exist');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://example.com\",\n  \"userId\": \"00000000-0000-0000-0000-000000000000\",\n  \"score\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "URL de más de 2048 caracteres",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('longUrl', 'https://example.com/' + 'a'.repeat(2100));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const r = pm.response.json();",
+                  "pm.test('Formato de error de Nest', () => {",
+                  "  pm.expect(r.statusCode).to.eql(400);",
+                  "  pm.expect(r).to.have.property('message');",
+                  "});",
+                  "",
+                  "pm.test('Mensaje de longitud máxima', () => pm.expect(JSON.stringify(r.message)).to.include('2048'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"{{longUrl}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "JSON mal formado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const r = pm.response.json();",
+                  "pm.test('Formato de error de Nest', () => {",
+                  "  pm.expect(r.statusCode).to.eql(400);",
+                  "  pm.expect(r).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"url\": ",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "limit fuera de rango (500)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const r = pm.response.json();",
+                  "pm.test('Formato de error de Nest', () => {",
+                  "  pm.expect(r.statusCode).to.eql(400);",
+                  "  pm.expect(r).to.have.property('message');",
+                  "});",
+                  "",
+                  "pm.test('Mensaje de máximo', () => pm.expect(JSON.stringify(r.message)).to.include('limit must not be greater than 100'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analyses?limit=500",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "500"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "limit no numérico",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const r = pm.response.json();",
+                  "pm.test('Formato de error de Nest', () => {",
+                  "  pm.expect(r.statusCode).to.eql(400);",
+                  "  pm.expect(r).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analyses?limit=abc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "abc"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "offset negativo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const r = pm.response.json();",
+                  "pm.test('Formato de error de Nest', () => {",
+                  "  pm.expect(r.statusCode).to.eql(400);",
+                  "  pm.expect(r).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analyses?offset=-1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ],
+              "query": [
+                {
+                  "key": "offset",
+                  "value": "-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "id que no es UUID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const r = pm.response.json();",
+                  "pm.test('Formato de error de Nest', () => {",
+                  "  pm.expect(r.statusCode).to.eql(400);",
+                  "  pm.expect(r).to.have.property('message');",
+                  "});",
+                  "",
+                  "pm.test('Mensaje de UUID', () => pm.expect(r.message).to.include('uuid'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analyses/no-es-un-uuid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses",
+                "no-es-un-uuid"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Intento de inyección SQL en id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const r = pm.response.json();",
+                  "pm.test('Formato de error de Nest', () => {",
+                  "  pm.expect(r.statusCode).to.eql(400);",
+                  "  pm.expect(r).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analyses/1' OR '1'='1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses",
+                "1' OR '1'='1"
+              ]
+            }
+          }
+        },
+        {
+          "name": "id inexistente → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('Mensaje', () => pm.expect(pm.response.json().message).to.eql('Análisis no encontrado'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analyses/00000000-0000-7000-8000-000000000000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses",
+                "00000000-0000-7000-8000-000000000000"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Ruta inexistente → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/no-existe",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "no-existe"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Seguridad",
+      "description": "Cabeceras, fuga de información y rate limiting. Ejecutar al final: el último test deja tu IP bloqueada ~1 minuto.",
+      "item": [
+        {
+          "name": "Cabeceras de seguridad",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const h = (n) => pm.response.headers.get(n);",
+                  "pm.test('X-Content-Type-Options: nosniff', () => pm.expect(h('X-Content-Type-Options')).to.eql('nosniff'));",
+                  "pm.test('X-Frame-Options presente', () => pm.expect(h('X-Frame-Options')).to.match(/^(DENY|SAMEORIGIN)$/));",
+                  "pm.test('Content-Security-Policy presente', () => pm.expect(h('Content-Security-Policy')).to.include(\"default-src 'self'\"));",
+                  "pm.test('Strict-Transport-Security presente', () => pm.expect(h('Strict-Transport-Security')).to.include('max-age='));",
+                  "pm.test('Referrer-Policy presente', () => pm.expect(h('Referrer-Policy')).to.be.a('string'));",
+                  "pm.test('No expone X-Powered-By', () => pm.response.to.not.have.header('X-Powered-By'));",
+                  "pm.test('Sin cabeceras de seguridad duplicadas', () => {",
+                  "  ['X-Frame-Options', 'X-Content-Type-Options', 'Referrer-Policy'].forEach((name) => {",
+                  "    const n = pm.response.headers.filter((x) => x.key.toLowerCase() === name.toLowerCase()).length;",
+                  "    pm.expect(n, name).to.eql(1);",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Errores sin stack trace ni detalles internos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.text();",
+                  "pm.test('No filtra stack, rutas ni SQL', () => {",
+                  "  pm.expect(body).to.not.match(/stack|node_modules|\\/app\\/dist|QueryFailedError|SELECT /i);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analyses/00000000-0000-7000-8000-000000000000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses",
+                "00000000-0000-7000-8000-000000000000"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Rate limit: 20 análisis/min por IP",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Agota el cupo de POST /analyses enviando peticiones hasta recibir un 429.",
+                  "// La petición principal (abajo) ya debe ser rechazada.",
+                  "const send = (i) => new Promise((resolve) => pm.sendRequest({",
+                  "  url: pm.variables.replaceIn('{{baseUrl}}/analyses'),",
+                  "  method: 'POST',",
+                  "  header: { 'Content-Type': 'application/json' },",
+                  "  body: { mode: 'raw', raw: JSON.stringify({ url: 'https://example.com/rate-' + i }) },",
+                  "}, (err, res) => resolve(res ? res.code : 0)));",
+                  "",
+                  "(async () => {",
+                  "  for (let i = 0; i < 25; i++) {",
+                  "    if ((await send(i)) === 429) break;",
+                  "  }",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('429 Too Many Requests', () => pm.response.to.have.status(429));",
+                  "pm.test('Indica cuándo reintentar', () => {",
+                  "  const retry = pm.response.headers.get('Retry-After') || pm.response.headers.get('Retry-After-default');",
+                  "  pm.expect(Number(retry)).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://example.com/rate-final\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analyses"
+              ]
+            },
+            "description": "Deja la IP bloqueada hasta que caduque la ventana (60 s)."
+          }
+        }
+      ]
+    }
+  ]
+}
