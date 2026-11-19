@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HeuristicsModule } from '../heuristics/heuristics.module.js';
+import { ReputationModule } from '../reputation/reputation.module.js';
 import { UrlAnalysis } from './entities/url-analysis.entity.js';
 import { AnalysisResult } from './entities/analysis-result.entity.js';
 import { ReputationCheck } from './entities/reputation-check.entity.js';
@@ -17,6 +18,7 @@ import { UrlAnalysisService } from './url-analysis.service.js';
       HeuristicResult,
     ]),
     HeuristicsModule,
+    ReputationModule,
   ],
   controllers: [UrlAnalysisController],
   providers: [UrlAnalysisService],

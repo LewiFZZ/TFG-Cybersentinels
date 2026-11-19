@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { ReputationCheckDto } from '../../reputation/dto/reputation.dto.js';
 import { RiskClassification } from '../entities/analysis-result.entity.js';
 import { AnalysisStatus } from '../entities/url-analysis.entity.js';
 
@@ -22,6 +23,17 @@ export class TriggeredRuleDto {
   details: Record<string, unknown> | null;
 }
 
+export class ScoreBreakdownDto {
+  @ApiProperty({ example: 50, description: 'Puntos de la heurística propia' })
+  heuristics: number;
+
+  @ApiProperty({
+    example: 60,
+    description: 'Puntos de las fuentes de reputación externas',
+  })
+  reputation: number;
+}
+
 export class AnalysisResponseDto {
   @ApiProperty({ format: 'uuid' })
   id: string;
@@ -35,13 +47,25 @@ export class AnalysisResponseDto {
   @ApiProperty({ example: 'paypal-login.xyz' })
   domain: string;
 
-  @ApiProperty({ minimum: 0, maximum: 100, example: 75 })
+  @ApiProperty({
+    minimum: 0,
+    maximum: 100,
+    example: 100,
+    description: 'min(100, heurística + reputación)',
+  })
   score: number;
+
+  @ApiProperty({ type: ScoreBreakdownDto })
+  scoreBreakdown: ScoreBreakdownDto;
 
   @ApiProperty({ enum: RiskClassification, enumName: 'RiskClassification' })
   classification: RiskClassification;
 
-  @ApiProperty({ enum: AnalysisStatus, enumName: 'AnalysisStatus' })
+  @ApiProperty({
+    enum: AnalysisStatus,
+    enumName: 'AnalysisStatus',
+    description: "'partial' si alguna fuente externa no respondió",
+  })
   status: AnalysisStatus;
 
   @ApiProperty({
@@ -51,6 +75,12 @@ export class AnalysisResponseDto {
 
   @ApiProperty({ type: [TriggeredRuleDto] })
   heuristics: TriggeredRuleDto[];
+
+  @ApiProperty({
+    type: [ReputationCheckDto],
+    description: 'Vacío si no hay API keys configuradas',
+  })
+  reputation: ReputationCheckDto[];
 
   @ApiProperty({ example: 3, description: 'Tiempo de análisis en ms' })
   durationMs: number | null;
