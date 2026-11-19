@@ -1,6 +1,35 @@
 name: urlsentinel
 
+# URLSentinel: análisis de URLs para detectar phishing, 100 % local.
+# Arranque:  cp .env.example .env   (y cambia DB_PASSWORD)
+#            docker compose up -d
+# Abrir:     http://localhost:8080
+
 services:
+  app:
+    image: ghcr.io/lewifzz/urlsentinel:${URLSENTINEL_VERSION:-latest}
+    build: .
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-urlsentinel}
+      DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en .env}
+      DB_NAME: ${DB_NAME:-urlsentinel}
+      THROTTLE_LIMIT: ${THROTTLE_LIMIT:-60}
+      # Reputación externa (opcional): sin API key, la fuente no se consulta.
+      VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
+      GOOGLE_SAFE_BROWSING_API_KEY: ${GOOGLE_SAFE_BROWSING_API_KEY:-}
+      REPUTATION_TIMEOUT_MS: ${REPUTATION_TIMEOUT_MS:-4000}
+      REPUTATION_CACHE_HOURS: ${REPUTATION_CACHE_HOURS:-24}
+    ports:
+      # Por defecto solo accesible desde este equipo (no hay login).
+      # Para exponerlo en la red local: HTTP_BIND=0.0.0.0 en .env
+      - "${HTTP_BIND:-127.0.0.1}:${HTTP_PORT:-8080}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
   db:
     image: postgres:18-alpine
     restart: unless-stopped
@@ -15,48 +44,12 @@ services:
       - ./database/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
       - ./database/postgres/init:/docker-entrypoint-initdb.d:ro
     shm_size: 256mb
-    ports:
-      # Solo en localhost (desarrollo / herramientas). Nunca expuesto a Internet.
-      - "127.0.0.1:${DB_EXPOSED_PORT:-5432}:5432"
+    # Sin puertos publicados: solo la app llega a la base de datos.
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
-    networks: [backend-net]
-
-  backend:
-    build: ./backend
-    restart: unless-stopped
-    env_file:
-      - path: ./backend/.env
-        required: false
-    environment:
-      NODE_ENV: production
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_USER: ${DB_USER:-urlsentinel}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_NAME: ${DB_NAME:-urlsentinel}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
-    depends_on:
-      db:
-        condition: service_healthy
-    networks: [backend-net, frontend-net]
-
-  frontend:
-    build: ./frontend
-    restart: unless-stopped
-    ports:
-      - "${HTTP_PORT:-8080}:80"
-    depends_on:
-      backend:
-        condition: service_healthy
-    networks: [frontend-net]
 
 volumes:
   pgdata:
-
-networks:
-  backend-net:     # db <-> backend
-  frontend-net:    # frontend (Nginx) <-> backend

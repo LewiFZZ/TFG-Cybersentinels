@@ -6,10 +6,10 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { envValidationSchema } from './config/env.validation.js';
 import { DatabaseModule } from './database/database.module.js';
-import { UsersModule } from './users/users.module.js';
 import { UrlAnalysisModule } from './url-analysis/url-analysis.module.js';
 import { IncidentsModule } from './incidents/incidents.module.js';
-import { AuditModule } from './audit/audit.module.js';
+import { StatsModule } from './stats/stats.module.js';
+import { FrontendModule } from './frontend/frontend.module.js';
 
 @Module({
   imports: [
@@ -25,10 +25,10 @@ import { AuditModule } from './audit/audit.module.js';
       },
     ]),
     DatabaseModule,
-    UsersModule,
     UrlAnalysisModule,
     IncidentsModule,
-    AuditModule,
+    StatsModule,
+    FrontendModule.register(),
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

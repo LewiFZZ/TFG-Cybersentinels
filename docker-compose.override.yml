@@ -1,0 +1,6 @@
+# Solo para desarrollo: Docker Compose lo aplica automáticamente si existe.
+# Publica PostgreSQL en localhost para `npm run start:dev` y las migraciones.
+services:
+  db:
+    ports:
+      - "127.0.0.1:${DB_EXPOSED_PORT:-5432}:5432"
