@@ -14,18 +14,45 @@ export interface TriggeredRule {
   details: Record<string, unknown> | null; // evidencia
 }
 
+export type ReputationSource = 'virustotal' | 'google_safe_browsing' | 'phishtank';
+export type CheckStatus = 'ok' | 'timeout' | 'rate_limited' | 'error';
+
+/** Resultado de una fuente externa de reputación (VirusTotal, Safe Browsing). */
+export interface ReputationCheck {
+  source: ReputationSource;
+  status: CheckStatus; // 'ok' o el motivo del fallo
+  malicious: boolean | null; // true peligrosa · false limpia · null sin datos/error
+  weight: number; // puntos que suma al score (0 si falló)
+  details: Record<string, unknown> | null; // evidencia; con fallo, { error }
+  responseTimeMs: number | null;
+  cached: boolean; // reutilizado de un análisis reciente de la misma URL
+}
+
+export interface ScoreBreakdown {
+  heuristics: number; // suma de pesos de las reglas propias
+  reputation: number; // suma de pesos de las fuentes externas
+}
+
 export interface AnalysisResponse {
   id: string;
   url: string; // tal cual la escribió el usuario
   normalizedUrl: string; // forma canónica
   domain: string; // host analizado (lo que hay que mostrar destacado)
-  score: number; // 0–100
+  score: number; // 0–100 = min(100, heuristics + reputation)
+  scoreBreakdown: ScoreBreakdown;
   classification: RiskClassification;
-  status: AnalysisStatus;
+  status: AnalysisStatus; // 'partial' si alguna fuente externa no respondió
   summary: string | null;
   heuristics: TriggeredRule[]; // ordenadas por peso desc. Vacío = nada sospechoso
+  reputation: ReputationCheck[]; // vacío si no hay API keys configuradas
   durationMs: number | null;
   createdAt: string; // ISO 8601 UTC
+}
+
+export interface ReputationSourceInfo {
+  source: ReputationSource;
+  name: string; // 'VirusTotal', 'Google Safe Browsing'
+  configured: boolean; // false = sin API key, no se consulta
 }
 
 export interface AnalysisListItem {

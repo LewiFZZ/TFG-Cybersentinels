@@ -31,6 +31,15 @@
     <span>Seguro 0–39</span><span>Sospechoso 40–69</span><span>Malicioso 70–100</span>
   </p>
 
+  <p class="breakdown">
+    Heurística <b class="mono">{{ a.scoreBreakdown.heuristics }}</b> + reputación externa
+    <b class="mono">{{ a.scoreBreakdown.reputation }}</b> →
+    <b class="mono">{{ a.score }}</b>/100
+    @if (a.scoreBreakdown.heuristics + a.scoreBreakdown.reputation > 100) {
+      <span class="muted">(máximo 100)</span>
+    }
+  </p>
+
   @if (a.summary) {
     <p class="result__summary">{{ a.summary }}</p>
   }
@@ -64,15 +73,59 @@
 
   @if (a.status === 'partial' || a.status === 'failed') {
     <p class="alert alert--warning">
-      El análisis no se ha completado del todo: la valoración puede ser incompleta.
+      Resultado parcial: alguna fuente externa no ha respondido. La valoración se ha calculado con
+      el resto de la información.
     </p>
   }
 
+  <section aria-labelledby="reputation-title">
+    <h3 id="reputation-title">
+      Reputación externa
+      @if (a.reputation.length) {
+        <span class="muted">({{ a.scoreBreakdown.reputation }} puntos)</span>
+      }
+    </h3>
+    <ul class="list">
+      @for (check of a.reputation; track check.source) {
+        <li class="list__item" [class.list__item--off]="check.status !== 'ok'">
+          <span class="list__main">
+            <strong>{{ sourceLabels[check.source] }}</strong>
+            <span>{{ reputationText(check) }}</span>
+            <span class="muted">
+              @if (check.cached) {
+                Resultado de las últimas 24 h
+              } @else if (check.responseTimeMs !== null) {
+                Respuesta en {{ check.responseTimeMs }} ms
+              }
+              @if (virusTotalLink(check); as link) {
+                · <a [href]="link" target="_blank" rel="noopener noreferrer">Ver informe en VirusTotal</a>
+              }
+            </span>
+          </span>
+          @if (check.status !== 'ok') {
+            <span class="tag tag--neutral">No disponible</span>
+          } @else if (check.malicious) {
+            <span class="tag tag--danger">+{{ check.weight }}</span>
+          } @else {
+            <span class="tag tag--ok">Sin detecciones</span>
+          }
+        </li>
+      } @empty {
+        <li class="list__item">
+          <span class="list__main">
+            <strong>Reputación externa no configurada</strong>
+            <span class="muted">El análisis se ha hecho solo con las reglas heurísticas propias.</span>
+          </span>
+        </li>
+      }
+    </ul>
+  </section>
+
   <section aria-labelledby="rules-title">
     <h3 id="rules-title">
-      Indicadores de riesgo detectados
+      Reglas heurísticas activadas
       @if (a.heuristics.length) {
-        <span class="muted">({{ totalWeight() }} puntos en total, máximo 100)</span>
+        <span class="muted">({{ a.scoreBreakdown.heuristics }} puntos)</span>
       }
     </h3>
     <ul class="list">

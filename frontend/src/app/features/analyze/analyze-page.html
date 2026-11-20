@@ -2,8 +2,8 @@
   <section class="layout__main" aria-labelledby="page-title">
     <h1 id="page-title">Analiza un enlace antes de abrirlo</h1>
     <p class="lead">
-      Nuestro motor heurístico revisa la estructura de la URL (dominio, extensión, palabras,
-      codificación…) y te explica por qué es o no es sospechosa.
+      Combinamos un motor heurístico propio, que revisa la estructura de la URL, con la reputación
+      de VirusTotal y Google Safe Browsing, y te explicamos por qué es o no es sospechosa.
     </p>
 
     <app-url-form [loading]="store.loading()" (analyze)="analyze($event)" />

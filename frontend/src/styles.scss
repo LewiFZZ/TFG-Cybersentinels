@@ -666,6 +666,22 @@ h3 {
   }
 }
 
+.breakdown {
+  margin: 0.75rem 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+  b {
+    color: var(--text);
+  }
+}
+
+.list__item--off {
+  background: #fafbfc;
+  .list__main > span:not(.muted) {
+    color: var(--muted);
+  }
+}
+
 .evidence {
   display: flex;
   flex-wrap: wrap;

@@ -40,6 +40,7 @@ Las lecturas usan `httpResource` (signals) y se recargan solas cuando se analiza
 | Requisito | Dónde |
 |---|---|
 | RF-01 Enviar URL | `url-form.ts` (Reactive Forms, http/https, dominio completo, máx. 2048) |
+| RF-02 Reputación externa | `analysis-result` (VirusTotal y Safe Browsing: veredicto, puntos, enlace al informe y desglose del score) |
 | RF-03/RF-05 Reglas y explicación | `analysis-result` (descripción, código, peso y evidencia de cada regla) |
 | RF-04 Score y clasificación | `analysis-result` (etiqueta, score 0–100 y barra con umbrales 40/70) |
 | RF-06 Historial | `history-page` (paginación, borrado individual y total) |

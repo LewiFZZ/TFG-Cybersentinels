@@ -1,11 +1,20 @@
 import { DatePipe } from '@angular/common';
 import { Component, computed, input } from '@angular/core';
 import { AnalysisResponse } from '../../../core/api/api.models';
-import { CLASSIFICATION_HINTS, detailPairs } from '../../../core/models/labels';
+import {
+  CLASSIFICATION_HINTS,
+  detailPairs,
+  reputationText,
+  SOURCE_LABELS,
+  virusTotalLink,
+} from '../../../core/models/labels';
 import { DefangPipe } from '../../../shared/defang.pipe';
 import { RiskBadge } from '../../../shared/risk-badge';
 
-/** Resultado del análisis: score y clasificación (RF-04) y reglas explicadas (RF-05). */
+/**
+ * Resultado del análisis: score y clasificación (RF-04), reputación externa (RF-02)
+ * y reglas explicadas (RF-03, RF-05).
+ */
 @Component({
   selector: 'app-analysis-result',
   imports: [DatePipe, DefangPipe, RiskBadge],
@@ -16,10 +25,10 @@ export class AnalysisResult {
 
   protected readonly hints = CLASSIFICATION_HINTS;
   protected readonly detailPairs = detailPairs;
+  protected readonly sourceLabels = SOURCE_LABELS;
+  protected readonly reputationText = reputationText;
+  protected readonly virusTotalLink = virusTotalLink;
 
-  protected readonly totalWeight = computed(() =>
-    this.analysis().heuristics.reduce((sum, r) => sum + r.weight, 0),
-  );
 
   /** Solo se muestra la forma normalizada si difiere de lo que escribió el usuario. */
   protected readonly showNormalized = computed(
