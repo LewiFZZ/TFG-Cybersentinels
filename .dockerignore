@@ -10,3 +10,5 @@ database
 .git
 .idea
 **/*.log
+backups
+scripts
