@@ -1,59 +1,57 @@
-# Frontend
+# URLSentinel · Frontend
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.2.7.
+SPA en Angular 22 para analizar URLs, consultar el historial y ver estadísticas.
+Contrato con el backend: `docs/API-FRONTEND.md` y `docs/openapi.json` (rama del backend).
 
-## Development server
+## Scripts
 
-To start a local development server, run:
+| Comando | Qué hace |
+|---|---|
+| `npm install` | Instala dependencias |
+| `npm start` | Desarrollo en http://localhost:4200 · `/api` → `http://localhost:3000` (backend con `npm run start:dev`) |
+| `npm run start:docker` | Igual, pero `/api` → `http://localhost:8080` (backend con `docker compose up -d`) |
+| `npm test` | Tests unitarios (Vitest) |
+| `npm run build` | Build de producción en `dist/frontend/browser` |
 
-```bash
-ng serve
+El código usa siempre rutas relativas `/api/...`: en desarrollo las reenvía el proxy de Angular
+(`proxy.conf.json` / `proxy.docker.conf.json`) y en producción NestJS sirve web y API en el mismo origen.
+
+## Estructura
+
+```
+src/app/
+├── core/
+│   ├── api/            # api.models.ts (tipos del backend) y url-sentinel-api.ts (POST/DELETE/GET id)
+│   ├── services/       # analysis-store.ts: análisis actual + aviso de cambios a los listados
+│   ├── models/         # textos de clasificación y de la evidencia de cada regla
+│   └── utils/          # validación de URL, defang, mensajes de error
+├── shared/             # risk-badge, pipe defang
+└── features/
+    ├── analyze/        # "/" y "/analisis/:id": formulario, resultado y últimos análisis
+    ├── history/        # "/historial": tabla paginada, borrar uno, vaciar con confirmación
+    ├── dashboard/      # "/dashboard": totales, gráfica diaria (SVG propio), reglas, dominios, amenazas
+    └── rules/          # "/reglas": catálogo de reglas heurísticas
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+Las lecturas usan `httpResource` (signals) y se recargan solas cuando se analiza o se borra algo.
 
-## Code scaffolding
+## Requisitos cubiertos
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+| Requisito | Dónde |
+|---|---|
+| RF-01 Enviar URL | `url-form.ts` (Reactive Forms, http/https, dominio completo, máx. 2048) |
+| RF-02 Reputación externa | `analysis-result` (VirusTotal y Safe Browsing: veredicto, puntos, enlace al informe y desglose del score) |
+| RF-03/RF-05 Reglas y explicación | `analysis-result` (descripción, código, peso y evidencia de cada regla) |
+| RF-04 Score y clasificación | `analysis-result` (etiqueta, score 0–100 y barra con umbrales 40/70) |
+| RF-06 Historial | `history-page` (paginación, borrado individual y total) |
+| RF-07 Errores | `api-error.ts` (400 con lista o texto, 404, 429 con `Retry-After`, 503) y aviso de `/api/health` |
+| Dashboard | `dashboard-page` con `GET /api/stats?days=7|30|90` |
 
-```bash
-ng generate component component-name
-```
+## Seguridad en el frontend
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
-
-```bash
-ng generate --help
-```
-
-## Building
-
-To build the project run:
-
-```bash
-ng build
-```
-
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+- Nada de `innerHTML` ni `bypassSecurityTrust*`: todo se pinta con interpolación.
+- La URL analizada nunca es un enlace: se muestra "desactivada" (`hxxp://dominio[.]com`).
+- Compatible con la CSP del backend: sin CDNs, sin scripts ni estilos `style="…"` inline,
+  gráfica en SVG propio y `optimization.styles.inlineCritical: false` en `angular.json`
+  (no cambiarlo: Angular generaría un `onload` inline que la CSP bloquea).
+- `<meta name="referrer" content="no-referrer">`.

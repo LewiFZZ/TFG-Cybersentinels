@@ -1,0 +1,159 @@
+@let a = analysis();
+
+<article class="card result" [class]="'result--' + a.classification" aria-labelledby="result-title">
+  <header class="result__header">
+    <div class="result__title">
+      <p class="eyebrow">Resultado del análisis</p>
+      <h2 id="result-title" class="result__domain mono break">{{ a.domain }}</h2>
+      <app-risk-badge [classification]="a.classification" />
+      <p class="result__hint">{{ hints[a.classification] }}</p>
+    </div>
+
+    <div class="score" aria-label="Puntuación de riesgo">
+      <span class="score__value">{{ a.score }}</span><span class="score__max">/100</span>
+    </div>
+  </header>
+
+  <div
+    class="meter"
+    role="meter"
+    aria-label="Nivel de riesgo"
+    aria-valuemin="0"
+    aria-valuemax="100"
+    [attr.aria-valuenow]="a.score"
+    [attr.aria-valuetext]="a.score + ' de 100'"
+  >
+    <div class="meter__fill" [class]="'meter__fill--' + a.classification" [style.width.%]="a.score"></div>
+    <span class="meter__mark meter__mark--40" aria-hidden="true"></span>
+    <span class="meter__mark meter__mark--70" aria-hidden="true"></span>
+  </div>
+  <p class="meter__legend muted" aria-hidden="true">
+    <span>Seguro 0–39</span><span>Sospechoso 40–69</span><span>Malicioso 70–100</span>
+  </p>
+
+  <p class="breakdown">
+    Heurística <b class="mono">{{ a.scoreBreakdown.heuristics }}</b> + reputación externa
+    <b class="mono">{{ a.scoreBreakdown.reputation }}</b> →
+    <b class="mono">{{ a.score }}</b>/100
+    @if (a.scoreBreakdown.heuristics + a.scoreBreakdown.reputation > 100) {
+      <span class="muted">(máximo 100)</span>
+    }
+  </p>
+
+  @if (a.summary) {
+    <p class="result__summary">{{ a.summary }}</p>
+  }
+
+  <dl class="facts">
+    <div class="facts__wide">
+      <dt>URL analizada (desactivada para que no se pueda abrir)</dt>
+      <dd class="mono break">{{ a.url | defang }}</dd>
+    </div>
+    @if (showNormalized()) {
+      <div class="facts__wide">
+        <dt>Forma normalizada</dt>
+        <dd class="mono break">{{ a.normalizedUrl | defang }}</dd>
+      </div>
+    }
+    <div>
+      <dt>Fecha</dt>
+      <dd>{{ a.createdAt | date: 'dd/MM/yyyy HH:mm' }}</dd>
+    </div>
+    @if (a.durationMs !== null) {
+      <div>
+        <dt>Tiempo de análisis</dt>
+        <dd>{{ a.durationMs }} ms</dd>
+      </div>
+    }
+    <div>
+      <dt>Indicadores</dt>
+      <dd>{{ a.heuristics.length }}</dd>
+    </div>
+  </dl>
+
+  @if (a.status === 'partial' || a.status === 'failed') {
+    <p class="alert alert--warning">
+      Resultado parcial: alguna fuente externa no ha respondido. La valoración se ha calculado con
+      el resto de la información.
+    </p>
+  }
+
+  <section aria-labelledby="reputation-title">
+    <h3 id="reputation-title">
+      Reputación externa
+      @if (a.reputation.length) {
+        <span class="muted">({{ a.scoreBreakdown.reputation }} puntos)</span>
+      }
+    </h3>
+    <ul class="list">
+      @for (check of a.reputation; track check.source) {
+        <li class="list__item" [class.list__item--off]="check.status !== 'ok'">
+          <span class="list__main">
+            <strong>{{ sourceLabels[check.source] }}</strong>
+            <span>{{ reputationText(check) }}</span>
+            <span class="muted">
+              @if (check.cached) {
+                Resultado de las últimas 24 h
+              } @else if (check.responseTimeMs !== null) {
+                Respuesta en {{ check.responseTimeMs }} ms
+              }
+              @if (virusTotalLink(check); as link) {
+                · <a [href]="link" target="_blank" rel="noopener noreferrer">Ver informe en VirusTotal</a>
+              }
+            </span>
+          </span>
+          @if (check.status !== 'ok') {
+            <span class="tag tag--neutral">No disponible</span>
+          } @else if (check.malicious) {
+            <span class="tag tag--danger">+{{ check.weight }}</span>
+          } @else {
+            <span class="tag tag--ok">Sin detecciones</span>
+          }
+        </li>
+      } @empty {
+        <li class="list__item">
+          <span class="list__main">
+            <strong>Reputación externa no configurada</strong>
+            <span class="muted">El análisis se ha hecho solo con las reglas heurísticas propias.</span>
+          </span>
+        </li>
+      }
+    </ul>
+  </section>
+
+  <section aria-labelledby="rules-title">
+    <h3 id="rules-title">
+      Reglas heurísticas activadas
+      @if (a.heuristics.length) {
+        <span class="muted">({{ a.scoreBreakdown.heuristics }} puntos)</span>
+      }
+    </h3>
+    <ul class="list">
+      @for (rule of a.heuristics; track rule.code) {
+        <li class="list__item">
+          <span class="list__main">
+            <strong>{{ rule.description }}</strong>
+            <span class="muted mono">{{ rule.code }}</span>
+            @if (rule.details) {
+              <span class="evidence">
+                @for (pair of detailPairs(rule.details); track pair[0]) {
+                  <span>{{ pair[0] }}: <b class="mono">{{ pair[1] }}</b></span>
+                }
+              </span>
+            }
+          </span>
+          <span class="tag tag--weight">+{{ rule.weight }}</span>
+        </li>
+      } @empty {
+        <li class="list__item">
+          <span class="list__main">
+            <strong>No se ha detectado ningún indicador de riesgo.</strong>
+            <span class="muted">
+              Recuerda que una URL "limpia" no garantiza que la página sea legítima.
+            </span>
+          </span>
+        </li>
+      }
+    </ul>
+  </section>
+</article>
